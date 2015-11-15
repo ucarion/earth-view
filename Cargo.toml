@@ -1,0 +1,13 @@
+[package]
+name = "earth-view"
+version = "0.1.0"
+authors = ["Ulysse Carion <ulysse@ulysse.io>"]
+
+[dependencies.byteorder]
+version = "*"
+
+[dependencies.image]
+version = "*"
+
+[dependencies.cgmath]
+version = "*"
