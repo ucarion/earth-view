@@ -7,15 +7,13 @@ use std::fs::File;
 mod elevation;
 mod color;
 
-use elevation::{Elevation, ElevationIterator};
-
 fn main() {
     const NUM_COLS: u32 = 10800;
     const NUM_ROWS: u32 = 6000;
 
-    let mut elev_data_file = File::open("elevation_data/j10g").unwrap();
+    let elev_data_file = File::open("elevation_data/g10g").unwrap();
     let mut img_buf = image::ImageBuffer::new(NUM_COLS as u32, NUM_ROWS as u32);
-    let mut elevation_iter = ElevationIterator(elev_data_file);
+    let mut elevation_iter = elevation::ElevationIterator(elev_data_file);
 
     println!("Staring...");
 
@@ -25,7 +23,6 @@ fn main() {
             let (r, g, b) = color::find_color(elevation);
 
             img_buf.put_pixel(x, y, image::Rgb([r, g, b]));
-            // println!("({:?}, {:?}) - {:?} - {:?}", x, y, elevation, color);
         }
 
         println!("{}", y);

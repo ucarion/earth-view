@@ -11,3 +11,6 @@ version = "*"
 
 [dependencies.cgmath]
 version = "*"
+
+[dependencies.itertools]
+version = "*"
