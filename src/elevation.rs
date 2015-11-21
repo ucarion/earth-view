@@ -7,6 +7,15 @@ pub enum Elevation {
     Sea
 }
 
+impl Elevation {
+    pub fn to_raw(&self) -> i16 {
+        match *self {
+            Elevation::Land { elevation } => elevation.round() as i16,
+            Elevation::Sea => -500
+        }
+    }
+}
+
 pub struct ElevationIterator<T>(pub T);
 
 impl<T: Read> Iterator for ElevationIterator<T> {
