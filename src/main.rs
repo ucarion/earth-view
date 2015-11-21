@@ -4,19 +4,18 @@ extern crate image;
 extern crate itertools;
 
 mod elevation;
-// mod color;
+mod color;
 
-use std::io::{BufReader, Seek, SeekFrom, Write};
+use std::io::{BufReader, Seek, SeekPosition};
 use std::fs::File;
-use std::mem;
 
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{LittleEndian, WriteBytesExt};
 
 use elevation::Elevation;
 
 fn main() {
-    let original_width = 10800;
-    let original_height = 5400;
+    let original_width = 43200;
+    let original_height = 21600;
 
     let new_width = original_width / 2;
     let new_height = original_height / 2;
@@ -25,40 +24,58 @@ fn main() {
 
     let mut reader1 = elevation_iter(&format!("elevation_data/full_data-{}x{}", original_width, original_height));
     let mut reader2 = elevation_iter(&format!("elevation_data/full_data-{}x{}", original_width, original_height));
-    reader2.seek(SeekFrom::Start(original_width)).unwrap();
 
-    let i16_width = mem::size_of::<i16>() as u64;
+    for y in 0..new_height {
+        let mut buckets = vec![(Elevation::Sea, Elevation::Sea, Elevation::Sea, Elevation::Sea); new_width];
 
-    for dest_y in 0..original_width / i16_width {
-        for _dest_x in 0..original_height / i16_width {
-            let a = Elevation::new(reader1.read_i16::<LittleEndian>().unwrap());
-            let b = Elevation::new(reader1.read_i16::<LittleEndian>().unwrap());
-            let c = Elevation::new(reader2.read_i16::<LittleEndian>().unwrap());
-            let d = Elevation::new(reader2.read_i16::<LittleEndian>().unwrap());
-            let mut average = 0;
+        let size_i16 = 2;
+        reader1.seek(SeekPosition::Start((y * 2) * original_width * size_i16)).unwrap();
+        reader2.seek(SeekPosition::Start((y * 2 + 1) * original_width * size_i16)).unwrap();
+
+        for x in 0..original_height {
+            buckets[x / 2].0 = Elevation::new(reader1.read_i16::<LittleEndian>().unwrap());
+            buckets[x / 2].1 = Elevation::new(reader1.read_i16::<LittleEndian>().unwrap());
+            buckets[x / 2].2 = Elevation::new(reader2.read_i16::<LittleEndian>().unwrap());
+            buckets[x / 2].3 = Elevation::new(reader2.read_i16::<LittleEndian>().unwrap());
+        }
+
+        for (a, b, c, d) in buckets {
+            let mut sum_land_elevation = 0;
             let mut num_water = 0;
 
-            for elev in [a, b, c, d].iter() {
-                match *elev {
-                    Elevation::Land { elevation } => average += elevation as i16,
-                    Elevation::Sea => num_water += 1
+            for x in [a, b, c, d].iter() {
+                match *x {
+                    Elevation::Sea => num_water += 1,
+                    Elevation::Land { elevation } => sum_land_elevation += elevation as i16
                 }
             }
 
             let out = if num_water >= 2 {
                 Elevation::Sea.to_raw()
             } else {
-                average / (4 - num_water)
+                sum_land_elevation / (4 - num_water)
             };
 
             file_out.write_i16::<LittleEndian>(out).unwrap();
         }
 
-        let offset = new_width * i16_width;
-        let i = reader1.seek(SeekFrom::Current(offset as i64)).unwrap();
-        let j = reader2.seek(SeekFrom::Current(offset as i64)).unwrap();
-        println!("Finished with row: {} -- {} {}", dest_y, i, j);
+        println!("{}", y);
     }
+
+//    let mut reader = elevation_iter(format!("elevation_data/full_data-{}x{}", new_width, new_height))
+//    let mut img_buf = image::ImageBuffer::new(new_width, new_height);
+//    for y in 0..5400 {
+//        for x in 0..10800 {
+//            let elevation = reader.next().unwrap();
+//            let (r, g, b) = color::find_color(elevation);
+//            img_buf.put_pixel(x, y, image::Rgb([r, g, b]));
+//        }
+//
+//        println!("{}", y);
+//    }
+//
+//    let mut img_out = File::create("output.png").unwrap();
+//    image::ImageRgb8(img_buf).save(&mut img_out, image::PNG).unwrap();
 }
 
 fn elevation_iter(path: &str) -> BufReader<File> {
