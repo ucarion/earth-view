@@ -1,59 +1,66 @@
 extern crate byteorder;
 extern crate cgmath;
 extern crate image;
-
-use std::io::{BufReader, Write};
-use std::fs::File;
-
-use byteorder::{LittleEndian, WriteBytesExt};
+extern crate itertools;
 
 mod elevation;
-mod color;
+// mod color;
+
+use std::io::{BufReader, Seek, SeekFrom, Write};
+use std::fs::File;
+use std::mem;
+
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+
+use elevation::Elevation;
 
 fn main() {
-    let a = elevation_iter("elevation_data/a10g");
-    let b = elevation_iter("elevation_data/b10g");
-    let c = elevation_iter("elevation_data/c10g");
-    let d = elevation_iter("elevation_data/d10g");
-    let e = elevation_iter("elevation_data/e10g");
-    let f = elevation_iter("elevation_data/f10g");
-    let g = elevation_iter("elevation_data/g10g");
-    let h = elevation_iter("elevation_data/h10g");
-    let i = elevation_iter("elevation_data/i10g");
-    let j = elevation_iter("elevation_data/j10g");
-    let k = elevation_iter("elevation_data/k10g");
-    let l = elevation_iter("elevation_data/l10g");
-    let m = elevation_iter("elevation_data/m10g");
-    let n = elevation_iter("elevation_data/n10g");
-    let o = elevation_iter("elevation_data/o10g");
-    let p = elevation_iter("elevation_data/p10g");
+    let original_width = 10800;
+    let original_height = 5400;
 
-    // Arrangement from http://www.ngdc.noaa.gov/mgg/topo/gltiles.html
-    let elevations = vec![
-        ((10800, 4800), vec![a, b, c, d]),
-        ((10800, 6000), vec![e, f, g, h]),
-        ((10800, 6000), vec![i, j, k, l]),
-        ((10800, 4800), vec![m, n, o, p])
-    ];
+    let new_width = original_width / 2;
+    let new_height = original_height / 2;
 
-    println!("Starting ...");
+    let mut file_out = File::create(format!("elevation_data/full_data-{}x{}", new_width, new_height)).unwrap();
 
-    let mut file_out = File::create("elevation_data/full_data").unwrap();
+    let mut reader1 = elevation_iter(&format!("elevation_data/full_data-{}x{}", original_width, original_height));
+    let mut reader2 = elevation_iter(&format!("elevation_data/full_data-{}x{}", original_width, original_height));
+    reader2.seek(SeekFrom::Start(original_width)).unwrap();
 
-    for ((width, height), mut data_row) in elevations.into_iter() {
-        for _ in 0..height {
-            for source in &mut data_row {
-                for _ in 0..width {
-                    let elevation = source.next().unwrap().to_raw();
-                    file_out.write_i16::<LittleEndian>(elevation).unwrap();
+    let i16_width = mem::size_of::<i16>() as u64;
+
+    for dest_y in 0..original_width / i16_width {
+        for _dest_x in 0..original_height / i16_width {
+            let a = Elevation::new(reader1.read_i16::<LittleEndian>().unwrap());
+            let b = Elevation::new(reader1.read_i16::<LittleEndian>().unwrap());
+            let c = Elevation::new(reader2.read_i16::<LittleEndian>().unwrap());
+            let d = Elevation::new(reader2.read_i16::<LittleEndian>().unwrap());
+            let mut average = 0;
+            let mut num_water = 0;
+
+            for elev in [a, b, c, d].iter() {
+                match *elev {
+                    Elevation::Land { elevation } => average += elevation as i16,
+                    Elevation::Sea => num_water += 1
                 }
             }
 
-            println!("Finished a row");
+            let out = if num_water >= 2 {
+                Elevation::Sea.to_raw()
+            } else {
+                average / (4 - num_water)
+            };
+
+            file_out.write_i16::<LittleEndian>(out).unwrap();
         }
+
+        let offset = new_width * i16_width;
+        let i = reader1.seek(SeekFrom::Current(offset as i64)).unwrap();
+        let j = reader2.seek(SeekFrom::Current(offset as i64)).unwrap();
+        println!("Finished with row: {} -- {} {}", dest_y, i, j);
     }
 }
 
-fn elevation_iter(path: &str) -> elevation::ElevationIterator<BufReader<File>> {
-    elevation::ElevationIterator(BufReader::new(File::open(path).unwrap()))
+fn elevation_iter(path: &str) -> BufReader<File> {
+    BufReader::new(File::open(path).unwrap())
 }

@@ -10,8 +10,15 @@ pub enum Elevation {
 impl Elevation {
     pub fn to_raw(&self) -> i16 {
         match *self {
-            Elevation::Land { elevation } => elevation.round() as i16,
+            Elevation::Land { elevation } => elevation as i16,
             Elevation::Sea => -500
+        }
+    }
+
+    pub fn new(raw: i16) -> Elevation {
+        match raw {
+            -500 => Elevation::Sea,
+            _ => Elevation::Land { elevation: raw as f64 }
         }
     }
 }
@@ -22,12 +29,6 @@ impl<T: Read> Iterator for ElevationIterator<T> {
     type Item = Elevation;
 
     fn next(&mut self) -> Option<Elevation> {
-        self.0.read_i16::<LittleEndian>().ok().map(|elevation| {
-            if elevation == -500 {
-                Elevation::Sea
-            } else {
-                Elevation::Land { elevation: elevation as f64 }
-            }
-        })
+        self.0.read_i16::<LittleEndian>().ok().map(Elevation::new)
     }
 }
