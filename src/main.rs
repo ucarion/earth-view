@@ -18,6 +18,7 @@ extern crate genmesh;
 extern crate gfx;
 extern crate gfx_window_glfw;
 extern crate glfw;
+extern crate rand;
 
 use cgmath::FixedArray;
 use cgmath::{Basis3, Matrix, Matrix3, Matrix4, Point3, Rotation3, Vector3};
@@ -29,14 +30,14 @@ use gfx::traits::{Factory, Stream, ToIndexSlice, ToSlice, FactoryExt};
 // Notice the use of FixedPoint.
 gfx_vertex!( Vertex {
     a_Pos@ pos: [Floater<i8>; 3],
-    a_TexCoord@ tex_coord: [Floater<u8>; 2],
+    a_Color@ color: [f32; 4],
 });
 
 impl Vertex {
-    fn new(p: [i8; 3], t: [u8; 2]) -> Vertex {
+    fn new(p: [i8; 3]) -> Vertex {
         Vertex {
             pos: Floater::cast3(p),
-            tex_coord: Floater::cast2(t),
+            color: [rand::random(), rand::random(), rand::random(), 0.0]
         }
     }
 }
@@ -63,35 +64,35 @@ pub fn main() {
 
     let vertex_data = [
         // top (0, 0, 1)
-        Vertex::new([-1, -1,  1], [0, 0]),
-        Vertex::new([ 1, -1,  1], [1, 0]),
-        Vertex::new([ 1,  1,  1], [1, 1]),
-        Vertex::new([-1,  1,  1], [0, 1]),
+        Vertex::new([-1, -1,  1]),
+        Vertex::new([ 1, -1,  1]),
+        Vertex::new([ 1,  1,  1]),
+        Vertex::new([-1,  1,  1]),
         // bottom (0, 0, -1)
-        Vertex::new([-1,  1, -1], [1, 0]),
-        Vertex::new([ 1,  1, -1], [0, 0]),
-        Vertex::new([ 1, -1, -1], [0, 1]),
-        Vertex::new([-1, -1, -1], [1, 1]),
+        Vertex::new([-1,  1, -1]),
+        Vertex::new([ 1,  1, -1]),
+        Vertex::new([ 1, -1, -1]),
+        Vertex::new([-1, -1, -1]),
         // right (1, 0, 0)
-        Vertex::new([ 1, -1, -1], [0, 0]),
-        Vertex::new([ 1,  1, -1], [1, 0]),
-        Vertex::new([ 1,  1,  1], [1, 1]),
-        Vertex::new([ 1, -1,  1], [0, 1]),
+        Vertex::new([ 1, -1, -1]),
+        Vertex::new([ 1,  1, -1]),
+        Vertex::new([ 1,  1,  1]),
+        Vertex::new([ 1, -1,  1]),
         // left (-1, 0, 0)
-        Vertex::new([-1, -1,  1], [1, 0]),
-        Vertex::new([-1,  1,  1], [0, 0]),
-        Vertex::new([-1,  1, -1], [0, 1]),
-        Vertex::new([-1, -1, -1], [1, 1]),
+        Vertex::new([-1, -1,  1]),
+        Vertex::new([-1,  1,  1]),
+        Vertex::new([-1,  1, -1]),
+        Vertex::new([-1, -1, -1]),
         // front (0, 1, 0)
-        Vertex::new([ 1,  1, -1], [1, 0]),
-        Vertex::new([-1,  1, -1], [0, 0]),
-        Vertex::new([-1,  1,  1], [0, 1]),
-        Vertex::new([ 1,  1,  1], [1, 1]),
+        Vertex::new([ 1,  1, -1]),
+        Vertex::new([-1,  1, -1]),
+        Vertex::new([-1,  1,  1]),
+        Vertex::new([ 1,  1,  1]),
         // back (0, -1, 0)
-        Vertex::new([ 1, -1,  1], [0, 0]),
-        Vertex::new([-1, -1,  1], [1, 0]),
-        Vertex::new([-1, -1, -1], [1, 1]),
-        Vertex::new([ 1, -1, -1], [0, 1]),
+        Vertex::new([ 1, -1,  1]),
+        Vertex::new([-1, -1,  1]),
+        Vertex::new([-1, -1, -1]),
+        Vertex::new([ 1, -1, -1]),
     ];
 
     let mesh = factory.create_mesh(&vertex_data);
