@@ -13,6 +13,7 @@
 // limitations under the License.
 
 extern crate cgmath;
+extern crate genmesh;
 #[macro_use]
 extern crate gfx;
 extern crate gfx_window_glfw;
@@ -44,7 +45,7 @@ impl Vertex {
 // pass parameters to a shader.
 gfx_parameters!( Params {
     u_Transform@ transform: [[f32; 4]; 4],
-    t_Color@ color: gfx::shade::TextureParam<R>,
+    u_Color@ color: [f32; 4],
 });
 
 
@@ -104,17 +105,6 @@ pub fn main() {
         20, 21, 22, 22, 23, 20, // back
     ];
 
-    let texture = factory.create_texture_rgba8(1, 1).unwrap();
-    factory.update_texture(
-        &texture, &(*texture.get_info()).into(),
-        &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8],
-        None).unwrap();
-
-    let sampler = factory.create_sampler(
-        gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Bilinear,
-                                   gfx::tex::WrapMode::Clamp)
-    );
-
     let program = {
         let vs = gfx::ShaderSource {
             glsl_120: Some(include_bytes!("cube_120.glslv")),
@@ -127,10 +117,9 @@ pub fn main() {
         factory.link_program_source(vs, fs).unwrap()
     };
 
-
     let data = Params {
         transform: Matrix4::identity().into_fixed(),
-        color: (texture, Some(sampler)),
+        color: [1.0, 0.0, 0.0, 0.0],
         _r: std::marker::PhantomData,
     };
 
@@ -173,6 +162,9 @@ pub fn main() {
 
         let transform = proj.mul_m(&view.mat.mul_m(&model));
         batch.params.transform = transform.into_fixed();
+
+        let color = [time.sin().abs(), time.cos().abs(), time.sin().abs(), 0.0];
+        batch.params.color = color;
 
         stream.clear(gfx::ClearData {
             color: [0.3, 0.3, 0.3, 1.0],
