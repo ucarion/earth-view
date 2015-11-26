@@ -1,88 +1,187 @@
-extern crate byteorder;
+// Copyright 2014 The Gfx-rs Developers.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 extern crate cgmath;
-extern crate image;
-extern crate itertools;
+#[macro_use]
+extern crate gfx;
+extern crate gfx_window_glfw;
+extern crate glfw;
 
-mod elevation;
-mod color;
+use cgmath::FixedArray;
+use cgmath::{Basis3, Matrix, Matrix3, Matrix4, Point3, Rotation3, Vector3};
+use cgmath::{Transform, AffineMatrix3, Decomposed};
+use gfx::attrib::Floater;
+use gfx::traits::{Factory, Stream, ToIndexSlice, ToSlice, FactoryExt};
 
-use std::io::{BufReader};
-use std::fs::File;
+// Declare the vertex format suitable for drawing.
+// Notice the use of FixedPoint.
+gfx_vertex!( Vertex {
+    a_Pos@ pos: [Floater<i8>; 3],
+    a_TexCoord@ tex_coord: [Floater<u8>; 2],
+});
 
-use byteorder::{LittleEndian, WriteBytesExt};
-
-use elevation::Elevation;
-
-fn main() {
-//    let original_width = 10800;
-//    let original_height = 5400;
-//
-//    let new_width = original_width / 2;
-//    let new_height = original_height / 2;
-//
-//    let mut file_out = File::create(format!("elevation_data/full_data-{}x{}", new_width, new_height)).unwrap();
-//
-//    let mut reader1 = elevation_iter(&format!("elevation_data/full_data-{}x{}", original_width, original_height));
-//    let mut reader2 = elevation_iter(&format!("elevation_data/full_data-{}x{}", original_width, original_height));
-//
-//    for y in 0..new_height {
-//        let mut buckets = vec![(Elevation::Sea, Elevation::Sea, Elevation::Sea, Elevation::Sea); new_width];
-//
-//        let size_i16 = 2;
-//        reader1.seek(SeekPosition::Start((y * 2) * original_width * size_i16)).unwrap();
-//        reader2.seek(SeekPosition::Start((y * 2 + 1) * original_width * size_i16)).unwrap();
-//
-//        for x in 0..original_height {
-//            buckets[x / 2].0 = Elevation::new(reader1.read_i16::<LittleEndian>().unwrap());
-//            buckets[x / 2].1 = Elevation::new(reader1.read_i16::<LittleEndian>().unwrap());
-//            buckets[x / 2].2 = Elevation::new(reader2.read_i16::<LittleEndian>().unwrap());
-//            buckets[x / 2].3 = Elevation::new(reader2.read_i16::<LittleEndian>().unwrap());
-//        }
-//
-//        for (a, b, c, d) in buckets {
-//            let mut sum_land_elevation = 0;
-//            let mut num_water = 0;
-//
-//            for x in [a, b, c, d].iter() {
-//                match *x {
-//                    Elevation::Sea => num_water += 1,
-//                    Elevation::Land { elevation } => sum_land_elevation += elevation as i16
-//                }
-//            }
-//
-//            let out = if num_water >= 2 {
-//                Elevation::Sea.to_raw()
-//            } else {
-//                sum_land_elevation / (4 - num_water)
-//            };
-//
-//            file_out.write_i16::<LittleEndian>(out).unwrap();
-//        }
-//
-//        println!("{}", y);
-//    }
-//
-
-    let path = "elevation_data/derived/transformed/full-10800x5400";
-    let width = 10800;
-    let height = 5400;
-    // let path = "elevation_data/derived/full_data-5400x2700";
-    let mut reader = elevation_iter(path);
-    let mut img_buf = image::ImageBuffer::new(width, height);
-    for y in 0..height {
-        for x in 0..width {
-            let elevation = reader.next().unwrap();
-            let (r, g, b) = color::find_color(elevation);
-            img_buf.put_pixel(x, y, image::Rgb([r, g, b]));
+impl Vertex {
+    fn new(p: [i8; 3], t: [u8; 2]) -> Vertex {
+        Vertex {
+            pos: Floater::cast3(p),
+            tex_coord: Floater::cast2(t),
         }
-
-        println!("{}", y);
     }
-
-    let mut img_out = File::create("output.png").unwrap();
-    image::ImageRgb8(img_buf).save(&mut img_out, image::PNG).unwrap();
 }
 
-fn elevation_iter(path: &str) -> elevation::ElevationIterator<BufReader<File>> {
-    elevation::ElevationIterator(BufReader::new(File::open(path).unwrap()))
+// The shader_param attribute makes sure the following struct can be used to
+// pass parameters to a shader.
+gfx_parameters!( Params {
+    u_Transform@ transform: [[f32; 4]; 4],
+    t_Color@ color: gfx::shade::TextureParam<R>,
+});
+
+
+//----------------------------------------
+
+pub fn main() {
+    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+    glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
+    let (mut window, events) = glfw
+        .create_window(640, 480, "Cube example", glfw::WindowMode::Windowed)
+        .unwrap();
+    window.set_key_polling(true);
+
+    let (mut stream, mut device, mut factory) = gfx_window_glfw::init(window);
+
+    let vertex_data = [
+        // top (0, 0, 1)
+        Vertex::new([-1, -1,  1], [0, 0]),
+        Vertex::new([ 1, -1,  1], [1, 0]),
+        Vertex::new([ 1,  1,  1], [1, 1]),
+        Vertex::new([-1,  1,  1], [0, 1]),
+        // bottom (0, 0, -1)
+        Vertex::new([-1,  1, -1], [1, 0]),
+        Vertex::new([ 1,  1, -1], [0, 0]),
+        Vertex::new([ 1, -1, -1], [0, 1]),
+        Vertex::new([-1, -1, -1], [1, 1]),
+        // right (1, 0, 0)
+        Vertex::new([ 1, -1, -1], [0, 0]),
+        Vertex::new([ 1,  1, -1], [1, 0]),
+        Vertex::new([ 1,  1,  1], [1, 1]),
+        Vertex::new([ 1, -1,  1], [0, 1]),
+        // left (-1, 0, 0)
+        Vertex::new([-1, -1,  1], [1, 0]),
+        Vertex::new([-1,  1,  1], [0, 0]),
+        Vertex::new([-1,  1, -1], [0, 1]),
+        Vertex::new([-1, -1, -1], [1, 1]),
+        // front (0, 1, 0)
+        Vertex::new([ 1,  1, -1], [1, 0]),
+        Vertex::new([-1,  1, -1], [0, 0]),
+        Vertex::new([-1,  1,  1], [0, 1]),
+        Vertex::new([ 1,  1,  1], [1, 1]),
+        // back (0, -1, 0)
+        Vertex::new([ 1, -1,  1], [0, 0]),
+        Vertex::new([-1, -1,  1], [1, 0]),
+        Vertex::new([-1, -1, -1], [1, 1]),
+        Vertex::new([ 1, -1, -1], [0, 1]),
+    ];
+
+    let mesh = factory.create_mesh(&vertex_data);
+
+    let index_data: &[u8] = &[
+         0,  1,  2,  2,  3,  0, // top
+         4,  5,  6,  6,  7,  4, // bottom
+         8,  9, 10, 10, 11,  8, // right
+        12, 13, 14, 14, 15, 12, // left
+        16, 17, 18, 18, 19, 16, // front
+        20, 21, 22, 22, 23, 20, // back
+    ];
+
+    let texture = factory.create_texture_rgba8(1, 1).unwrap();
+    factory.update_texture(
+        &texture, &(*texture.get_info()).into(),
+        &[0x20u8, 0xA0u8, 0xC0u8, 0x00u8],
+        None).unwrap();
+
+    let sampler = factory.create_sampler(
+        gfx::tex::SamplerInfo::new(gfx::tex::FilterMethod::Bilinear,
+                                   gfx::tex::WrapMode::Clamp)
+    );
+
+    let program = {
+        let vs = gfx::ShaderSource {
+            glsl_120: Some(include_bytes!("cube_120.glslv")),
+            .. gfx::ShaderSource::empty()
+        };
+        let fs = gfx::ShaderSource {
+            glsl_120: Some(include_bytes!("cube_120.glslf")),
+            .. gfx::ShaderSource::empty()
+        };
+        factory.link_program_source(vs, fs).unwrap()
+    };
+
+
+    let data = Params {
+        transform: Matrix4::identity().into_fixed(),
+        color: (texture, Some(sampler)),
+        _r: std::marker::PhantomData,
+    };
+
+    let mut batch = gfx::batch::Full::new(mesh, program, data).unwrap();
+    batch.slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
+    batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
+
+    let mut time: f32 = 0.0;
+
+    while !stream.out.window.should_close() {
+        glfw.poll_events();
+        for (_, event) in glfw::flush_messages(&events) {
+            match event {
+                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
+                    stream.out.window.set_should_close(true),
+                _ => {},
+            }
+        }
+
+        let view: AffineMatrix3<f32> = Transform::look_at(
+            &Point3::new(1.5f32, -5.0, 3.0),
+            &Point3::new(0f32, 0.0, 0.0),
+            &Vector3::unit_z(),
+        );
+        let proj = cgmath::perspective(cgmath::deg(45.0f32),
+                                       stream.get_aspect_ratio(), 1.0, 10.0);
+
+        let scale = 1.0;
+        let rotation: Basis3<_> = Rotation3::from_euler(
+            cgmath::rad(time.sin()),
+            cgmath::rad(time.cos()),
+            cgmath::rad(time.sin()));
+
+        let disp = Vector3::new(0.0, 0.0, 0.0);
+        let model = Decomposed {
+            scale: scale,
+            rot: rotation,
+            disp: disp
+        }.into();
+
+        let transform = proj.mul_m(&view.mat.mul_m(&model));
+        batch.params.transform = transform.into_fixed();
+
+        stream.clear(gfx::ClearData {
+            color: [0.3, 0.3, 0.3, 1.0],
+            depth: 1.0,
+            stencil: 0,
+        });
+        stream.draw(&batch).unwrap();
+        stream.present(&mut device);
+
+        time += 0.01;
+    }
 }

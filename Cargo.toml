@@ -10,7 +10,22 @@ version = "*"
 version = "*"
 
 [dependencies.cgmath]
-version = "*"
+version = "0.3"
+
+[dependencies.num]
+version = "0.1"
 
 [dependencies.itertools]
+version = "*"
+
+[dependencies.gfx]
+version = "*"
+
+[dependencies.gfx_window_glfw]
+version = "*"
+
+[dependencies.glfw]
+version = "*"
+
+[dependencies.rand]
 version = "*"
