@@ -2,8 +2,8 @@ use cgmath::{EuclideanVector, Vector3};
 
 use elevation::Elevation;
 
-pub fn find_color(elevation: Elevation) -> (u8, u8, u8) {
-    match elevation {
+pub fn find_color(elevation: &Elevation) -> (u8, u8, u8) {
+    match *elevation {
         Elevation::Sea => (10, 105, 148),
         Elevation::Land { elevation } => find_color_land(elevation)
     }

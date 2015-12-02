@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate byteorder;
 extern crate cgmath;
 extern crate genmesh;
 #[macro_use]
@@ -26,19 +27,38 @@ use cgmath::{Transform, AffineMatrix3, Decomposed};
 use gfx::attrib::Floater;
 use gfx::traits::{Factory, Stream, ToIndexSlice, ToSlice, FactoryExt};
 
+use std::f32::consts::PI;
+use std::io::BufReader;
+use std::fs::File;
+
+mod elevation;
+mod color;
+
+use elevation::{Elevation, ElevationIterator};
+
 // Declare the vertex format suitable for drawing.
 // Notice the use of FixedPoint.
 gfx_vertex!( Vertex {
-    a_Pos@ pos: [Floater<i8>; 3],
+    a_Pos@ pos: [f32; 3],
     a_Color@ color: [f32; 4],
 });
 
 impl Vertex {
-    fn new(p: [i8; 3]) -> Vertex {
+    fn new(x: f32, y: f32, elev: &Elevation) -> Vertex {
+        let z = match *elev {
+            Elevation::Sea => 0.0,
+            Elevation::Land { elevation: land_elev } => land_elev as f32 / 500.0
+        };
+
         Vertex {
-            pos: Floater::cast3(p),
-            color: [rand::random(), rand::random(), rand::random(), 0.0]
+            pos: [x, y, z],
+            color: Self::elev_to_color(elev)
         }
+    }
+
+    fn elev_to_color(elevation: &Elevation) -> [f32; 4] {
+        let (r, g, b) = color::find_color(elevation);
+        [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 0.0]
     }
 }
 
@@ -46,65 +66,87 @@ impl Vertex {
 // pass parameters to a shader.
 gfx_parameters!( Params {
     u_Transform@ transform: [[f32; 4]; 4],
-    u_Color@ color: [f32; 4],
 });
 
 
 //----------------------------------------
 
+fn xy_to_index(x: usize, y: usize, width: usize, height: usize) -> usize {
+    y * width + x
+}
+
 pub fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     let (mut window, events) = glfw
-        .create_window(640, 480, "Cube example", glfw::WindowMode::Windowed)
+        .create_window(1200, 800, "Cube example", glfw::WindowMode::Windowed)
         .unwrap();
     window.set_key_polling(true);
 
     let (mut stream, mut device, mut factory) = gfx_window_glfw::init(window);
 
-    let vertex_data = [
-        // top (0, 0, 1)
-        Vertex::new([-1, -1,  1]),
-        Vertex::new([ 1, -1,  1]),
-        Vertex::new([ 1,  1,  1]),
-        Vertex::new([-1,  1,  1]),
-        // bottom (0, 0, -1)
-        Vertex::new([-1,  1, -1]),
-        Vertex::new([ 1,  1, -1]),
-        Vertex::new([ 1, -1, -1]),
-        Vertex::new([-1, -1, -1]),
-        // right (1, 0, 0)
-        Vertex::new([ 1, -1, -1]),
-        Vertex::new([ 1,  1, -1]),
-        Vertex::new([ 1,  1,  1]),
-        Vertex::new([ 1, -1,  1]),
-        // left (-1, 0, 0)
-        Vertex::new([-1, -1,  1]),
-        Vertex::new([-1,  1,  1]),
-        Vertex::new([-1,  1, -1]),
-        Vertex::new([-1, -1, -1]),
-        // front (0, 1, 0)
-        Vertex::new([ 1,  1, -1]),
-        Vertex::new([-1,  1, -1]),
-        Vertex::new([-1,  1,  1]),
-        Vertex::new([ 1,  1,  1]),
-        // back (0, -1, 0)
-        Vertex::new([ 1, -1,  1]),
-        Vertex::new([-1, -1,  1]),
-        Vertex::new([-1, -1, -1]),
-        Vertex::new([ 1, -1, -1]),
-    ];
+
+//    let elevation = [
+//        [rand::random(), rand::random(), rand::random(), rand::random()],
+//        [rand::random(), rand::random(), rand::random(), rand::random()],
+//        [rand::random(), rand::random(), rand::random(), rand::random()],
+//        [rand::random(), rand::random(), rand::random(), rand::random()]
+//    ];
+
+
+
+
+    let width: usize = 450;
+    let height: usize = 450;
+    let file_in = File::open("elevation_data/derived/transformed_final_tiles/93").unwrap();
+    let elevation_raw: Vec<_> = ElevationIterator(BufReader::new(file_in)).collect();
+    let mut elevation = vec![Elevation::Sea; width * height];
+    for y in 0..height {
+        for x in 0..width {
+            elevation[y * width + x] = elevation_raw[(width - y - 1) * width + x];
+        }
+    }
+
+//    let elevation: vec<vec<elevation>> = (0..height).map(|y| {
+//        (0..width).map(|x| {
+//            elevation[y * width + x]
+//        }).collect()
+//    }).collect();
+
+    // println!("{:?}", elevation);
+
+    let mut vertex_data = Vec::new();
+    for y in 0..height {
+        for x in 0..width {
+            let pos_x = x as f32 - (width as f32) / 2.0;
+            let pos_y = y as f32 - (height as f32) / 2.0;
+            let elevation = &elevation[y * width + x];
+            let raw_elevation = elevation.to_raw() - 500;
+            let elevation = Elevation::new(elevation.to_raw() - 500);
+            vertex_data.push(Vertex::new(pos_x / 2.0, pos_y / 2.0, &elevation));
+        }
+    }
+
+//    for (i, vertex) in vertex_data.iter().enumerate() {
+//        if vertex.pos[2] != -500.0 {
+//            println!("{:?}", vertex);
+//        }
+//    }
+
+    let mut index_data: Vec<u32> = Vec::new();
+    for y in 0..height - 1 {
+        for x in 0..width - 1 {
+            let a = xy_to_index(x, y, width, height) as u32;
+            let b = xy_to_index(x + 1, y, width, height) as u32;
+            let c = xy_to_index(x, y + 1, width, height) as u32;
+            let d = xy_to_index(x + 1, y + 1, width, height) as u32;
+
+            index_data.extend(&[a, b, c]);
+            index_data.extend(&[d, c, b]);
+        }
+    }
 
     let mesh = factory.create_mesh(&vertex_data);
-
-    let index_data: &[u8] = &[
-         0,  1,  2,  2,  3,  0, // top
-         4,  5,  6,  6,  7,  4, // bottom
-         8,  9, 10, 10, 11,  8, // right
-        12, 13, 14, 14, 15, 12, // left
-        16, 17, 18, 18, 19, 16, // front
-        20, 21, 22, 22, 23, 20, // back
-    ];
 
     let program = {
         let vs = gfx::ShaderSource {
@@ -120,13 +162,11 @@ pub fn main() {
 
     let data = Params {
         transform: Matrix4::identity().into_fixed(),
-        color: [1.0, 0.0, 0.0, 0.0],
         _r: std::marker::PhantomData,
     };
 
     let mut batch = gfx::batch::Full::new(mesh, program, data).unwrap();
     batch.slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
-    batch.state = batch.state.depth(gfx::state::Comparison::LessEqual, true);
 
     let mut time: f32 = 0.0;
 
@@ -141,18 +181,18 @@ pub fn main() {
         }
 
         let view: AffineMatrix3<f32> = Transform::look_at(
-            &Point3::new(1.5f32, -5.0, 3.0),
+            &Point3::new(0.0f32, -200.0, 200.0),
             &Point3::new(0f32, 0.0, 0.0),
             &Vector3::unit_z(),
         );
         let proj = cgmath::perspective(cgmath::deg(45.0f32),
-                                       stream.get_aspect_ratio(), 1.0, 10.0);
+                                       stream.get_aspect_ratio(), 1.0, 10000.0);
 
         let scale = 1.0;
         let rotation: Basis3<_> = Rotation3::from_euler(
-            cgmath::rad(time.sin()),
-            cgmath::rad(time.cos()),
-            cgmath::rad(time.sin()));
+            cgmath::rad(0.0),
+            cgmath::rad(0.0),
+            cgmath::rad(0.0));
 
         let disp = Vector3::new(0.0, 0.0, 0.0);
         let model = Decomposed {
@@ -163,9 +203,6 @@ pub fn main() {
 
         let transform = proj.mul_m(&view.mat.mul_m(&model));
         batch.params.transform = transform.into_fixed();
-
-        let color = [time.sin().abs(), time.cos().abs(), time.sin().abs(), 0.0];
-        batch.params.color = color;
 
         stream.clear(gfx::ClearData {
             color: [0.3, 0.3, 0.3, 1.0],
