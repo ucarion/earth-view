@@ -71,8 +71,8 @@ gfx_parameters!( Params {
 
 //----------------------------------------
 
-fn xy_to_index(x: usize, y: usize, width: usize, height: usize) -> usize {
-    y * width + x
+fn xy_to_index(x: usize, y: usize, row_width: usize) -> usize {
+    y * row_width + x
 }
 
 pub fn main() {
@@ -93,58 +93,64 @@ pub fn main() {
 //        [rand::random(), rand::random(), rand::random(), rand::random()]
 //    ];
 
-
-
-
     let width: usize = 450;
     let height: usize = 450;
-    let file_in = File::open("elevation_data/derived/transformed_final_tiles/93").unwrap();
-    let elevation_raw: Vec<_> = ElevationIterator(BufReader::new(file_in)).collect();
-    let mut elevation = vec![Elevation::Sea; width * height];
-    for y in 0..height {
-        for x in 0..width {
-            elevation[y * width + x] = elevation_raw[(width - y - 1) * width + x];
-        }
-    }
-
-//    let elevation: vec<vec<elevation>> = (0..height).map(|y| {
-//        (0..width).map(|x| {
-//            elevation[y * width + x]
-//        }).collect()
-//    }).collect();
-
-    // println!("{:?}", elevation);
 
     let mut vertex_data = Vec::new();
-    for y in 0..height {
-        for x in 0..width {
-            let pos_x = x as f32 - (width as f32) / 2.0;
-            let pos_y = y as f32 - (height as f32) / 2.0;
-            let elevation = &elevation[y * width + x];
-            let raw_elevation = elevation.to_raw() - 500;
-            let elevation = Elevation::new(elevation.to_raw() - 500);
-            vertex_data.push(Vertex::new(pos_x / 2.0, pos_y / 2.0, &elevation));
-        }
-    }
-
-//    for (i, vertex) in vertex_data.iter().enumerate() {
-//        if vertex.pos[2] != -500.0 {
-//            println!("{:?}", vertex);
-//        }
-//    }
-
     let mut index_data: Vec<u32> = Vec::new();
-    for y in 0..height - 1 {
-        for x in 0..width - 1 {
-            let a = xy_to_index(x, y, width, height) as u32;
-            let b = xy_to_index(x + 1, y, width, height) as u32;
-            let c = xy_to_index(x, y + 1, width, height) as u32;
-            let d = xy_to_index(x + 1, y + 1, width, height) as u32;
 
-            index_data.extend(&[a, b, c]);
-            index_data.extend(&[d, c, b]);
+    let tile_paths = vec![
+        "elevation_data/derived/transformed_final_tiles/84",
+        "elevation_data/derived/transformed_final_tiles/85",
+        "elevation_data/derived/transformed_final_tiles/86"
+    ];
+
+    for (tile_index, tile_path) in tile_paths.iter().enumerate() {
+        let file_in = File::open(tile_path).unwrap();
+        let mut elevation_iter = ElevationIterator(BufReader::new(file_in));
+
+        for y in 0..height {
+            for x in 0..width {
+                let elevation = elevation_iter.next().unwrap();
+
+                // TODO: Move the data back down by 500, maybe?
+                let elevation = Elevation::new(elevation.to_raw() - 500);
+
+                let pos_x = (width * tile_index + x) as f32;
+                let pos_y = (height - y) as f32;
+
+                // println!("{} {}", pos_x, pos_y);
+
+                vertex_data.push(Vertex::new(pos_x, pos_y, &elevation));
+            }
         }
     }
+
+    for y in 0..height {
+        for x in 0..width * tile_paths.len() - 1 {
+
+        }
+    }
+
+    for tile_index in 0..tile_paths.len() {
+        for y in 0..height - 1 {
+            for x in 0..width - 1 {
+                let row_width = tile_paths.len() * width;
+
+                let pos_x = width * tile_index + x;
+                let pos_y = height - y;
+
+                let a = xy_to_index(pos_x, pos_y, row_width);
+                let b = xy_to_index(pos_x + 1, pos_y, row_width);
+                let c = xy_to_index(pos_x, pos_y + 1, row_width);
+                let d = xy_to_index(pos_x + 1, pos_y + 1, row_width);
+
+                index_data.extend(&[c as u32, b as u32, a as u32]);
+                index_data.extend(&[b as u32, c as u32, d as u32]);
+            }
+        }
+    }
+
 
     let mesh = factory.create_mesh(&vertex_data);
 
@@ -180,9 +186,10 @@ pub fn main() {
             }
         }
 
+        let camera_x = width as f32 * 1.5 + time.sin() * 100.0;
         let view: AffineMatrix3<f32> = Transform::look_at(
-            &Point3::new(0.0f32, -200.0, 200.0),
-            &Point3::new(0f32, 0.0, 0.0),
+            &Point3::new(camera_x, 0.0, 150.0),
+            &Point3::new(camera_x, height as f32 * 0.5, 0.0),
             &Vector3::unit_z(),
         );
         let proj = cgmath::perspective(cgmath::deg(45.0f32),
