@@ -1,17 +1,10 @@
 use cgmath::{EuclideanVector, Vector3};
 
-use elevation::Elevation;
-
-pub fn find_color(elevation: &Elevation) -> (u8, u8, u8) {
-    match *elevation {
-        Elevation::Sea => (10, 105, 148),
-        Elevation::Land { elevation } => find_color_land(elevation)
-    }
-}
-
-fn find_color_land(elevation: f64) -> (u8, u8, u8) {
+pub fn find_color(elevation: f32) -> (u8, u8, u8) {
+    let water = Vector3::new(10.0, 105.0, 148.0);
     let color_ramp = [
-        (-500.0,  Vector3::new(26.0, 150.0, 65.0)),
+        (-500.0,  water),
+        (0.0,     water),
         (0.0,     Vector3::new(26.0, 150.0, 65.0)),
         (100.0,   Vector3::new(166.0, 217.0, 106.0)),
         (500.0,   Vector3::new(255.0, 255.0, 191.0)),
@@ -34,7 +27,7 @@ fn find_color_land(elevation: f64) -> (u8, u8, u8) {
     vec3_to_rgb(&last_color)
 }
 
-fn vec3_to_rgb(vec: &Vector3<f64>) -> (u8, u8, u8) {
+fn vec3_to_rgb(vec: &Vector3<f32>) -> (u8, u8, u8) {
     let r = vec.x.floor() as u8;
     let g = vec.y.floor() as u8;
     let b = vec.z.floor() as u8;
