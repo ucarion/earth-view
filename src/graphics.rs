@@ -114,19 +114,35 @@ pub fn main() {
     let mut batch = gfx::batch::Full::new(mesh, program, data).unwrap();
     batch.slice = index_data.to_slice(&mut factory, gfx::PrimitiveType::TriangleList);
 
+    let mut camera_position = Point3::new(0.0, -200.0, 200.0);
+
     while !stream.out.window.should_close() {
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
                 glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) =>
                     stream.out.window.set_should_close(true),
+                glfw::WindowEvent::Key(glfw::Key::Up, _, glfw::Action::Press, _) =>
+                    camera_position.y += 10.0,
+                glfw::WindowEvent::Key(glfw::Key::Down, _, glfw::Action::Press, _) =>
+                    camera_position.y -= 10.0,
+                glfw::WindowEvent::Key(glfw::Key::Left, _, glfw::Action::Press, _) =>
+                    camera_position.x -= 10.0,
+                glfw::WindowEvent::Key(glfw::Key::Right, _, glfw::Action::Press, _) =>
+                    camera_position.x += 10.0,
+                glfw::WindowEvent::Key(glfw::Key::LeftShift, _, glfw::Action::Press, _) =>
+                    camera_position.z += 10.0,
+                glfw::WindowEvent::Key(glfw::Key::LeftControl, _, glfw::Action::Press, _) =>
+                    camera_position.z -= 10.0,
                 _ => {},
             }
         }
 
+        let look_at = Point3::new(camera_position.x, camera_position.y + 200.0, camera_position.z - 200.0);
+        println!("{:?} {:?}", camera_position, look_at);
         let view: AffineMatrix3<f32> = Transform::look_at(
-            &Point3::new(0.0f32 + width as f32 / 2.0, -200.0 + height as f32 / 2.0, 200.0),
-            &Point3::new(width as f32 / 2.0, height as f32 / 2.0, 0.0),
+            &camera_position,
+            &look_at,
             &Vector3::unit_z(),
         );
         let proj = cgmath::perspective(cgmath::deg(45.0f32),
