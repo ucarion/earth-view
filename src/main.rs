@@ -19,6 +19,7 @@ extern crate genmesh;
 extern crate gfx;
 extern crate gfx_window_glfw;
 extern crate glfw;
+extern crate image;
 extern crate rand;
 
 mod color;

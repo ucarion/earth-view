@@ -10,6 +10,7 @@ use cgmath::FixedArray;
 use cgmath::{Basis3, Matrix, Matrix4, Point3, Rotation3, Vector3};
 use cgmath::{Transform, AffineMatrix3, Decomposed};
 use gfx::traits::{Stream, ToIndexSlice, ToSlice, FactoryExt};
+use image::{self, GenericImage};
 
 use std::io::BufReader;
 use std::fs::File;
@@ -56,6 +57,7 @@ pub fn main() {
     let width: usize = 225;
     let height: usize = 225;
     let mut file_in = BufReader::new(File::open("heightmap_chunks/83").unwrap());
+    let color_data = image::open("color_chunks/83.png").unwrap();
 
     let default_vertex = Vertex::new([0.0; 3], [0.0; 4]);
     let mut vertex_data = vec![default_vertex; width * height];
@@ -70,11 +72,9 @@ pub fn main() {
 
             let pos = [pos_x, pos_y, elev_scaled];
 
-            let (r, g, b) = color::find_color(elev_actual);
-            let (r, g, b) = (r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-
-            let color = [r, g, b, 1.0];
-
+            let color = color_data.get_pixel(x as u32, y as u32).data;
+            let color = [color[0] as f32, color[1] as f32, color[2] as f32, color[3] as f32];
+            let color = [color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, color[3] / 255.0];
             vertex_data[y * width + x] = Vertex::new(pos, color);
         }
     }
@@ -139,7 +139,6 @@ pub fn main() {
         }
 
         let look_at = Point3::new(camera_position.x, camera_position.y + 200.0, camera_position.z - 200.0);
-        println!("{:?} {:?}", camera_position, look_at);
         let view: AffineMatrix3<f32> = Transform::look_at(
             &camera_position,
             &look_at,
