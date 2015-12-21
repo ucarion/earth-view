@@ -24,7 +24,7 @@ gfx_vertex!( Vertex {
 });
 
 impl Vertex {
-    fn new(pos: [f32; 3], color: [f32; 4]) -> Vertex {
+    pub fn new(pos: [f32; 3], color: [f32; 4]) -> Vertex {
         Vertex {
             pos: pos,
             color: color

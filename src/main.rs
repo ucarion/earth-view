@@ -23,10 +23,12 @@ extern crate image;
 extern crate rand;
 
 mod color;
-mod graphics;
+// mod graphics;
 mod etopo;
+mod quadtree;
 
 fn main() {
     // etopo::process_raw_data();
-    graphics::main();
+    // graphics::main();
+    quadtree::main();
 }
